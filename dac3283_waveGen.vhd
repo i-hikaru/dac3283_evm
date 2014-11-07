@@ -182,4 +182,4 @@ begin  -- architecture Behavioral
         ob => datan(i));
   end generate data;
   
-end architecture behavioral;
+end architecture Behavioral;

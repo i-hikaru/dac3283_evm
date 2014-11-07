@@ -3,10 +3,10 @@
 -- author        : ISHITSUKA Hikaru
 --
 -- create date   : 2014-11-06 00:19:52
--- module name   : dac3283_evm
+-- module name   : dac3283_evm_top
 -- project name  : RHEA
--- target devices: Kintex-7
--- tool versions : ISE 14.7
+-- target devices: xc7k325tffg900-2
+-- tool versions : Vivado 2014.2
 -- description   : 
 -- dependencies  : 
 --
