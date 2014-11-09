@@ -21,61 +21,152 @@ use ieee.std_logic_unsigned.all;
 
 entity dac3283_evm_top is
   port (
---    clk          : in  std_logic;       -- 204.8 MHz
     rst          : in  std_logic;
     fpga_clkoutp : in  std_logic;
     fpga_clkoutn : in  std_logic;
-    dataclkp     : out std_logic;
-    dataclkn     : out std_logic;
+    dac_dataclkp : out std_logic;
+    dac_dataclkn : out std_logic;
     dac_framep   : out std_logic;
     dac_framen   : out std_logic;
-    datap        : out std_logic_vector(7 downto 0);
-    datan        : out std_logic_vector(7 downto 0));
+    dac_datap    : out std_logic_vector(7 downto 0);
+    dac_datan    : out std_logic_vector(7 downto 0));
 end entity dac3283_evm_top;
 
 architecture Behavioral of dac3283_evm_top is
 
-  component clk_lvds is
-    generic (      
-      sys_w : integer := 1;  -- width of the data for the system
-      dev_w : integer := 1); -- width of the data for the device
+  component mmcm_clocks is
     port (
-      -- clock and reset signals
-      data_in_from_pins_p : in  std_logic_vector(sys_w-1 downto 0);
-      data_in_from_pins_n : in  std_logic_vector(sys_w-1 downto 0);
-      data_in_to_device   : out std_logic_vector(dev_w-1 downto 0);
-      clk_in_p            : in  std_logic;
-      clk_in_n            : in  std_logic;
-      clk_out             : out std_logic;
-      io_reset            : in  std_logic);
-  end component clk_lvds;
+      clk_in1  : in  std_logic;         -- 204.8 MHz
+      clk_out1 : out std_logic;         -- 204.8 MHz
+      clk_out2 : out std_logic);        -- 409.6 MHz
+  end component mmcm_clocks;
 
   component dac3283_waveGen is
     port (
-      CLK_409_7MHz : in  std_logic;
-      CLK_204_8MHz : in  std_logic;
-      RST          : in  std_logic;
-      DAC_DATAP    : out std_logic_vector(7 downto 0);
-      DAC_DATAN    : out std_logic_vector(7 downto 0);
-      DAC_FRAMEP   : out std_logic;
-      DAC_FRAMEN   : out std_logic;
-      DAC_DATACLKP : out std_logic;
-      DAC_DATACLKN : out std_logic);
+      clk      : in  std_logic;
+      rst      : in  std_logic;
+      sin_data : out std_logic_vector(15 downto 0);
+      cos_data : out std_logic_vector(15 downto 0));
   end component dac3283_waveGen;
 
-  signal clk : std_logic;
+  signal clk_buf         : std_logic;
+  signal clk             : std_logic;
+  signal clk_2x          : std_logic;
+  signal dac_dataclk_buf : std_logic;
+  signal cnt             : std_logic_vector(3 downto 0);
+  signal dac_frame_buf   : std_logic;
+  signal sin_data        : std_logic_vector(15 downto 0);
+  signal cos_data        : std_logic_vector(15 downto 0);
+  signal dac_data_buf    : std_logic_vector(7 downto 0);
   
 begin  -- architecture Behavioral
 
-  x0 : clk_lvds
-    port map (
-      data_in_from_pins_p => '0',
-      data_in_from_pins_n => '0',
-      data_in_to_device   => '0',
-      clk_in_p            => fpga_clkoutp,
-      clk_in_n            => fpga_clkoutn,
-      clk_out             => clk,
-      io_reset            => rst);
+  dac_dataclk_buf <= not clk;
+  dac_frame_buf   <= '1' when cnt = "0000" else '0';
 
+  process(clk)
+  begin
+    if (clk'event and clk = '1') then
+      if rst = '0' then
+        cnt <= (others => '0');
+      else
+        cnt <= cnt + 1;
+      end if;
+    end if;
+  end process;
+
+  mmcm_clk : mmcm_clocks
+    port map (
+      clk_in1   => clk_buf,
+      clk_out1  => clk,
+      clk_out2 => clk_2x);
+
+  ibufds_fpga_clkout : ibufds
+    generic map (
+      diff_term    => false,
+      ibuf_low_pwr => true,
+      iostandard   => "default")
+    port map (
+      o  => clk,
+      i  => fpga_clkoutp,
+      ib => fpga_clkoutn);
+
+  obufds_dac_dataclk : obufds
+    generic map (
+      iostandard => "default",
+      slew       => "slow")
+    port map (
+      o  => dac_dataclkp,
+      ob => dac_dataclkn,
+      i  => dac_dataclk_buf);
+
+  obufds_dac_frame : obufds
+    generic map (
+      iostandard => "default",
+      slew       => "slow")
+    port map (
+      o  => dac_framep,
+      ob => dac_framen,
+      i  => dac_frame_buf);
+
+  wavegen : dac3283_waveGen
+    port map (
+      clk      => clk,
+      rst      => rst,
+      sin_data => sin_data,
+      cos_data => cos_data);
+
+  dac_data : for i in 0 to 7 generate
+    oserdese2_dac_data : oserdese2
+      generic map (
+        data_rate_oq   => "ddr",
+        data_rate_tq   => "ddr",
+        data_width     => 4,
+        init_oq        => '0',
+        init_tq        => '0',
+        serdes_mode    => "master",
+        srval_oq       => '0',
+        srval_tq       => '0',
+        tbyte_ctl      => "false",
+        tbyte_src      => "false",
+        tristate_width => 4)
+      port map (
+        ofb       => open,
+        oq        => dac_data_buf(i),
+        shiftout1 => open,
+        shiftout2 => open,
+        tbyteout  => open,
+        tfb       => open,
+        tq        => open,
+        clk       => clk_2x,
+        clkdiv    => clk,
+        d1        => sin_data(i),
+        d2        => sin_data(i+8),
+        d3        => cos_data(i),
+        d4        => cos_data(i+8),
+        d5        => '0',
+        d6        => '0',
+        d7        => '0',
+        d8        => '0',
+        oce       => '1',
+        rst       => rst,
+        shiftin1  => '0',
+        shiftin2  => '0',
+        t1        => '0',
+        t2        => '0',
+        t3        => '0',
+        t4        => '0',
+        tbytein   => '0',
+        tce       => '0');
+
+    obufds_dac_data : obufds
+      generic map (
+        iostandard => "default",
+        slew       => "slow")
+      port map (
+        o  => dac_datap,
+        ob => dac_datan,
+        i  => dac_data_buf(i));
+  end generate dac_data;
 
 end architecture Behavioral;

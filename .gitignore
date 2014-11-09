@@ -4,6 +4,7 @@ iseconfig/
 dac3283_evm/
 man/
 ref/
+templates/
 
 *.gise
 *.xise
