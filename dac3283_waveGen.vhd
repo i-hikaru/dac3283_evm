@@ -1,17 +1,17 @@
 --------------------------------------------------------------------------------
--- file name     : dac3283_waveGen.vhd
--- author        : ISHITSUKA Hikaru
+-- file name:      dac3283_waveGen.vhd
+-- author:         ISHITSUKA Hikaru
 --
--- create date   : 2014-10-30 17:28:15
--- module name   : dac3283_waveGen
--- project name  : RHEA
+-- create date:    2014-10-30 17:28:15
+-- module name:    dac3283_waveGen
+-- project name:   RHEA
 -- target devices: xc7k325tffg900-2
--- tool versions : Vivado 2014.2
--- description   : 
--- dependencies  : 
+-- tool versions:  Vivado 2014.2
+-- description: 
+-- dependencies: 
 --
--- revision      : 
--- comments      : 
+-- revision:
+-- comments: 
 --
 --------------------------------------------------------------------------------
 library ieee;
@@ -38,7 +38,8 @@ architecture Behavioral of dac3283_waveGen is
       m_axis_data_tdata   : out std_logic_vector(31 downto 0));
   end component dds_compiler_dac_iq;
 
-  signal sin_cos_data : std_logic_vector(31 downto 0);
+  signal m_axis_data_tvalid : std_logic := '1';
+  signal sin_cos_data       : std_logic_vector(31 downto 0);
   
 begin  -- architecture Behavioral
 
@@ -50,7 +51,7 @@ begin  -- architecture Behavioral
       aclk                => clk,
       s_axis_phase_tvalid => '1',
       s_axis_phase_tdata  => X"0064",
-      m_axis_data_tvalid  => '1',
+      m_axis_data_tvalid  => m_axis_data_tvalid,
       m_axis_data_tdata   => sin_cos_data);
 
 end architecture Behavioral;

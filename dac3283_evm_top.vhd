@@ -19,9 +19,14 @@ use ieee.std_logic_1164.all;
 use ieee.std_logic_arith.all;
 use ieee.std_logic_unsigned.all;
 
+library unisim;
+use unisim.vcomponents.all;
+
 entity dac3283_evm_top is
   port (
-    rst          : in  std_logic;
+    reset        : in  std_logic;
+    led          : out std_logic_vector(7 downto 0);
+    -- DAC3283
     fpga_clkoutp : in  std_logic;
     fpga_clkoutn : in  std_logic;
     dac_dataclkp : out std_logic;
@@ -33,6 +38,13 @@ entity dac3283_evm_top is
 end entity dac3283_evm_top;
 
 architecture Behavioral of dac3283_evm_top is
+
+  component push_sw is
+    port (
+      clk : in  std_logic;
+      i   : in  std_logic;
+      o   : out std_logic);
+  end component push_sw;
 
   component mmcm_clocks is
     port (
@@ -49,6 +61,7 @@ architecture Behavioral of dac3283_evm_top is
       cos_data : out std_logic_vector(15 downto 0));
   end component dac3283_waveGen;
 
+  signal rst             : std_logic;
   signal clk_buf         : std_logic;
   signal clk             : std_logic;
   signal clk_2x          : std_logic;
@@ -63,6 +76,7 @@ begin  -- architecture Behavioral
 
   dac_dataclk_buf <= not clk;
   dac_frame_buf   <= '1' when cnt = "0000" else '0';
+  led             <= "10000000" when rst = '0' else "00000000";
 
   process(clk)
   begin
@@ -75,10 +89,16 @@ begin  -- architecture Behavioral
     end if;
   end process;
 
+  push_sw_rst : push_sw
+    port map (
+      clk => clk,
+      i   => reset,
+      o   => rst);
+
   mmcm_clk : mmcm_clocks
     port map (
-      clk_in1   => clk_buf,
-      clk_out1  => clk,
+      clk_in1  => clk_buf,
+      clk_out1 => clk,
       clk_out2 => clk_2x);
 
   ibufds_fpga_clkout : ibufds
@@ -87,7 +107,7 @@ begin  -- architecture Behavioral
       ibuf_low_pwr => true,
       iostandard   => "default")
     port map (
-      o  => clk,
+      o  => clk_buf,
       i  => fpga_clkoutp,
       ib => fpga_clkoutn);
 
@@ -164,8 +184,8 @@ begin  -- architecture Behavioral
         iostandard => "default",
         slew       => "slow")
       port map (
-        o  => dac_datap,
-        ob => dac_datan,
+        o  => dac_datap(i),
+        ob => dac_datan(i),
         i  => dac_data_buf(i));
   end generate dac_data;
 
