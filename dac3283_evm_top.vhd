@@ -27,7 +27,7 @@ entity dac3283_evm_top is
     reset        : in  std_logic;
     led          : out std_logic_vector(7 downto 0);
     -- DAC3283
-    fpga_clkoutp : in  std_logic;
+    fpga_clkoutp : in  std_logic;       -- 153.6 MHz
     fpga_clkoutn : in  std_logic;
     dac_dataclkp : out std_logic;
     dac_dataclkn : out std_logic;
@@ -48,9 +48,9 @@ architecture Behavioral of dac3283_evm_top is
 
   component mmcm_clocks is
     port (
-      clk_in1  : in  std_logic;         -- 204.8 MHz
-      clk_out1 : out std_logic;         -- 204.8 MHz
-      clk_out2 : out std_logic);        -- 409.6 MHz
+      clk_in1  : in  std_logic;
+      clk_out1 : out std_logic;
+      clk_out2 : out std_logic);
   end component mmcm_clocks;
 
   component dac3283_waveGen is
@@ -63,8 +63,8 @@ architecture Behavioral of dac3283_evm_top is
 
   signal rst             : std_logic;
   signal clk_buf         : std_logic;
-  signal clk             : std_logic;
-  signal clk_2x          : std_logic;
+  signal clk             : std_logic;   -- 153.6 MHz
+  signal clk_2x          : std_logic;   -- 307.2 MHz
   signal dac_dataclk_buf : std_logic;
   signal cnt             : std_logic_vector(3 downto 0);
   signal dac_frame_buf   : std_logic;
@@ -76,7 +76,7 @@ begin  -- architecture Behavioral
 
   dac_dataclk_buf <= not clk;
   dac_frame_buf   <= '1' when cnt = "0000" else '0';
-  led             <= "10000000" when rst = '0' else "00000000";
+  led             <= "10000000" when rst = '1' else "00000000";
 
   process(clk)
   begin
@@ -95,12 +95,6 @@ begin  -- architecture Behavioral
       i   => reset,
       o   => rst);
 
-  mmcm_clk : mmcm_clocks
-    port map (
-      clk_in1  => clk_buf,
-      clk_out1 => clk,
-      clk_out2 => clk_2x);
-
   ibufds_fpga_clkout : ibufds
     generic map (
       diff_term    => false,
@@ -110,6 +104,12 @@ begin  -- architecture Behavioral
       o  => clk_buf,
       i  => fpga_clkoutp,
       ib => fpga_clkoutn);
+
+  mmcm_clk : mmcm_clocks
+    port map (
+      clk_in1  => clk_buf,
+      clk_out1 => clk,
+      clk_out2 => clk_2x);
 
   obufds_dac_dataclk : obufds
     generic map (
