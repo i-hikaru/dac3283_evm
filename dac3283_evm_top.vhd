@@ -1,19 +1,19 @@
---------------------------------------------------------------------------------
--- file name     : dac3283_evm_top.vhd
--- author        : ISHITSUKA Hikaru
+-------------------------------------------------------------------------------
+-- file name      : dac3283_evm_top.vhd
+-- author         : hikaru
 --
--- create date   : 2014-11-06 00:19:52
--- module name   : dac3283_evm_top
--- project name  : RHEA
--- target devices: xc7k325tffg900-2
--- tool versions : Vivado 2014.2
--- description   : 
--- dependencies  : 
+-- create date    : 2014-11-06 00:19:52
+-- module name    : dac3283_evm_top
+-- project name   : rhea
+-- target devices : xc7k325tffg900-2
+-- tool versions  : Vivado 2014.2
+-- description    : 
+-- dependencies   : 
 --
--- revision      : 
--- comments      : 
+-- revision       : 
+-- comments       : 
 --
---------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_arith.all;
@@ -23,21 +23,23 @@ library unisim;
 use unisim.vcomponents.all;
 
 entity dac3283_evm_top is
+  
   port (
     reset        : in  std_logic;
     led          : out std_logic_vector(7 downto 0);
     -- DAC3283
-    fpga_clkoutp : in  std_logic;       -- 153.6 MHz
-    fpga_clkoutn : in  std_logic;
+    cdcoutp      : in  std_logic;       -- 153.6 MHz
+    cdcoutn      : in  std_logic;
     dac_dataclkp : out std_logic;
     dac_dataclkn : out std_logic;
     dac_framep   : out std_logic;
     dac_framen   : out std_logic;
     dac_datap    : out std_logic_vector(7 downto 0);
     dac_datan    : out std_logic_vector(7 downto 0));
+
 end entity dac3283_evm_top;
 
-architecture Behavioral of dac3283_evm_top is
+architecture behavioral of dac3283_evm_top is
 
   component push_sw is
     port (
@@ -46,12 +48,14 @@ architecture Behavioral of dac3283_evm_top is
       o   : out std_logic);
   end component push_sw;
 
-  component mmcm_clocks is
+  component mmcm_clk is
     port (
       clk_in1  : in  std_logic;
       clk_out1 : out std_logic;
-      clk_out2 : out std_logic);
-  end component mmcm_clocks;
+      clk_out2 : out std_logic;
+      reset    : in  std_logic;
+      locked   : out std_logic);
+  end component mmcm_clk;
 
   component dac3283_waveGen is
     port (
@@ -65,23 +69,28 @@ architecture Behavioral of dac3283_evm_top is
   signal clk_buf         : std_logic;
   signal clk             : std_logic;   -- 153.6 MHz
   signal clk_2x          : std_logic;   -- 307.2 MHz
+  signal clk_loc         : std_logic;
   signal dac_dataclk_buf : std_logic;
   signal cnt             : std_logic_vector(3 downto 0);
   signal dac_frame_buf   : std_logic;
   signal sin_data        : std_logic_vector(15 downto 0);
   signal cos_data        : std_logic_vector(15 downto 0);
   signal dac_data_buf    : std_logic_vector(7 downto 0);
-  
-begin  -- architecture Behavioral
 
-  dac_dataclk_buf <= not clk;
-  dac_frame_buf   <= '1' when cnt = "0000" else '0';
-  led             <= "10000000" when rst = '1' else "00000000";
+  -- debug
+  signal cnt_dbg, cnt_dbg_2x : std_logic_vector(27 downto 0);
+  
+begin  -- architecture behavioral
+
+--  dac_dataclk_buf <= not clk;
+  dac_dataclk_buf <= clk;
+  dac_frame_buf   <= '1' when cnt = X"F" else '0';
+  led(7)          <= '1' when rst = '1'  else '0';
 
   process(clk)
   begin
     if (clk'event and clk = '1') then
-      if rst = '0' then
+      if rst = '1' then
         cnt <= (others => '0');
       else
         cnt <= cnt + 1;
@@ -95,21 +104,23 @@ begin  -- architecture Behavioral
       i   => reset,
       o   => rst);
 
-  ibufds_fpga_clkout : ibufds
+  ibufds_cdcout : ibufds
     generic map (
       diff_term    => false,
       ibuf_low_pwr => true,
       iostandard   => "default")
     port map (
       o  => clk_buf,
-      i  => fpga_clkoutp,
-      ib => fpga_clkoutn);
+      i  => cdcoutp,
+      ib => cdcoutn);
 
-  mmcm_clk : mmcm_clocks
+  mmcm_clk_dac_data : mmcm_clk
     port map (
       clk_in1  => clk_buf,
       clk_out1 => clk,
-      clk_out2 => clk_2x);
+      clk_out2 => clk_2x,
+      reset    => rst,
+      locked   => clk_loc);
 
   obufds_dac_dataclk : obufds
     generic map (
@@ -129,7 +140,7 @@ begin  -- architecture Behavioral
       ob => dac_framen,
       i  => dac_frame_buf);
 
-  wavegen : dac3283_waveGen
+  wavegen_dac : dac3283_waveGen
     port map (
       clk      => clk,
       rst      => rst,
@@ -149,7 +160,7 @@ begin  -- architecture Behavioral
         srval_tq       => '0',
         tbyte_ctl      => "false",
         tbyte_src      => "false",
-        tristate_width => 4)
+        tristate_width => 1)
       port map (
         ofb       => open,
         oq        => dac_data_buf(i),
@@ -160,16 +171,16 @@ begin  -- architecture Behavioral
         tq        => open,
         clk       => clk_2x,
         clkdiv    => clk,
-        d1        => sin_data(i),
-        d2        => sin_data(i+8),
-        d3        => cos_data(i),
-        d4        => cos_data(i+8),
+        d1        => sin_data(i+8),
+        d2        => sin_data(i),
+        d3        => cos_data(i+8),
+        d4        => cos_data(i),
         d5        => '0',
         d6        => '0',
         d7        => '0',
         d8        => '0',
         oce       => '1',
-        rst       => rst,
+        rst       => not clk_loc,
         shiftin1  => '0',
         shiftin2  => '0',
         t1        => '0',
@@ -189,4 +200,30 @@ begin  -- architecture Behavioral
         i  => dac_data_buf(i));
   end generate dac_data;
 
-end architecture Behavioral;
+  -- debug
+  led(1) <= '1' when cnt_dbg(27) = '1'    else '0';
+  led(0) <= '1' when cnt_dbg_2x(27) = '1' else '0';
+
+  process(clk)
+  begin
+    if (clk'event and clk = '1') then
+      if rst = '1' then
+        cnt_dbg <= (others => '0');
+      else
+        cnt_dbg <= cnt_dbg + 1;
+      end if;
+    end if;
+  end process;
+
+  process(clk_2x)
+  begin
+    if (clk_2x'event and clk_2x = '1') then
+      if rst = '1' then
+        cnt_dbg_2x <= (others => '0');
+      else
+        cnt_dbg_2x <= cnt_dbg_2x + 1;
+      end if;
+    end if;
+  end process;
+
+end architecture behavioral;
