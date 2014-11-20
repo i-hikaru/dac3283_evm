@@ -82,10 +82,10 @@ architecture behavioral of dac3283_evm_top is
   
 begin  -- architecture behavioral
 
---  dac_dataclk_buf <= not clk;
-  dac_dataclk_buf <= clk;
+  dac_dataclk_buf <= not clk;
   dac_frame_buf   <= '1' when cnt = X"F" else '0';
   led(7)          <= '1' when rst = '1'  else '0';
+  led(6 downto 2) <= "00000";
 
   process(clk)
   begin
